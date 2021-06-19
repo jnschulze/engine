@@ -69,6 +69,10 @@ class AngleSurfaceManager {
   // not null.
   EGLBoolean SwapBuffers();
 
+  EGLDisplay egl_display() const { return egl_display_; };
+
+  EGLConfig egl_config() const { return egl_config_; }
+
  private:
   bool Initialize();
   void CleanUp();

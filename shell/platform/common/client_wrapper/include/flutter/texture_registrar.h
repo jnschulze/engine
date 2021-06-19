@@ -42,10 +42,27 @@ class PixelBufferTexture {
   const CopyBufferCallback copy_buffer_callback_;
 };
 
+// A GPU surface-based texture.
+class GpuSurfaceTexture {
+ public:
+  GpuSurfaceTexture(
+      void* handle,
+      FlutterDesktopGpuSurfaceType surface_type,
+      size_t width,
+      size_t height,
+      FlutterDesktopPixelFormat format = kFlutterDesktopPixelFormatNone)
+      : surface_descriptor_({surface_type, handle, width, height, format}) {}
+
+  constexpr const FlutterDesktopGpuSurfaceDescriptor* descriptor() const {
+    return &surface_descriptor_;
+  }
+
+ private:
+  const FlutterDesktopGpuSurfaceDescriptor surface_descriptor_;
+};
+
 // The available texture variants.
-// Only PixelBufferTexture is currently implemented.
-// Other variants are expected to be added in the future.
-typedef std::variant<PixelBufferTexture> TextureVariant;
+typedef std::variant<PixelBufferTexture, GpuSurfaceTexture> TextureVariant;
 
 // An object keeping track of external textures.
 //

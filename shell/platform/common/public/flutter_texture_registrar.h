@@ -22,9 +22,23 @@ typedef struct FlutterDesktopTextureRegistrar*
 // Possible values for the type specified in FlutterDesktopTextureInfo.
 // Additional types may be added in the future.
 typedef enum {
-  // A Pixel buffer-based texture.
-  kFlutterDesktopPixelBufferTexture
+  // A generic pixel buffer-based texture.
+  kFlutterDesktopPixelBufferTexture,
+  // A platform-specific GPU surface-backed texture.
+  kFlutterDesktopGpuSurfaceTexture
 } FlutterDesktopTextureType;
+
+// Supported pixel formats.
+typedef enum {
+  // Uninitialized.
+  kFlutterDesktopPixelFormatNone,
+  // Represents a 32-bit RGBA color format with 8 bits each for red, green, blue
+  // and alpha.
+  kFlutterDesktopPixelFormatRGBA8888,
+  // Represents a 32-bit BGRA color format with 8 bits each for blue, green, red
+  // and alpha.
+  kFlutterDesktopPixelFormatBGRA8888
+} FlutterDesktopPixelFormat;
 
 // An image buffer object.
 typedef struct {
@@ -35,6 +49,30 @@ typedef struct {
   // Height of the pixel buffer.
   size_t height;
 } FlutterDesktopPixelBuffer;
+
+// Supported GPU surface types.
+typedef enum {
+  // Uninitialized.
+  kFlutterDesktopGpuSurfaceTypeNone,
+  // A D3D/DXGI-based surface.
+  kFlutterDesktopGpuSurfaceTypeDxgi
+} FlutterDesktopGpuSurfaceType;
+
+// A GPU surface descriptor.
+typedef struct {
+  // The type of surface |handle| points to.
+  FlutterDesktopGpuSurfaceType type;
+  // The surface handle.
+  // For DirectX textures (kFlutterDesktopGpuSurfaceTypeDxgi), this is the
+  // shared handle of an IDXGIResource.
+  void* handle;
+  // The width of the surface.
+  size_t width;
+  // The height of the surface.
+  size_t height;
+  // The pixel format which might by optional depending on the surface type.
+  FlutterDesktopPixelFormat format;
+} FlutterDesktopGpuSurfaceDescriptor;
 
 // The pixel buffer copy callback definition provided to
 // the Flutter engine to copy the texture.
@@ -62,6 +100,7 @@ typedef struct {
   FlutterDesktopTextureType type;
   union {
     FlutterDesktopPixelBufferTextureConfig pixel_buffer_config;
+    FlutterDesktopGpuSurfaceDescriptor gpu_surface_descriptor;
   };
 } FlutterDesktopTextureInfo;
 
