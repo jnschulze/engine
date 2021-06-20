@@ -15,31 +15,31 @@
 
 namespace flutter {
 
+typedef struct ExternalTextureD3dState ExternalTextureD3dState;
+
 // An external texture that is backed by a DXGI surface.
-class ExternalTextureD3D : public ExternalTexture {
+class ExternalTextureD3d : public ExternalTexture {
  public:
-  // Creates a texture using the provided FlutterDesktopGpuSurfaceDescriptor.
-  static std::unique_ptr<ExternalTextureD3D> MakeFromSurfaceDescriptor(
-      const FlutterDesktopGpuSurfaceDescriptor* descriptor,
-      AngleSurfaceManager* surface_manager);
+  ExternalTextureD3d(
+      const FlutterDesktopGpuSurfaceTextureCallback texture_callback,
+      void* user_data,
+      const AngleSurfaceManager* surface_manager,
+      const GlProcs& gl_procs);
+  virtual ~ExternalTextureD3d();
 
   bool PopulateTexture(size_t width,
                        size_t height,
                        FlutterOpenGLTexture* opengl_texture) override;
 
-  virtual ~ExternalTextureD3D();
-
  private:
-  EGLDisplay egl_display_;
-  EGLSurface egl_surface_;
-  GLuint gl_texture_ = 0;
-  size_t width_;
-  size_t height_;
+  bool CreateOrUpdateTexture(
+      const FlutterDesktopGpuSurfaceDescriptor* descriptor);
 
-  ExternalTextureD3D(EGLDisplay egl_display,
-                     EGLSurface egl_surface,
-                     size_t width,
-                     size_t height);
+  std::unique_ptr<ExternalTextureD3dState> state_;
+  const FlutterDesktopGpuSurfaceTextureCallback texture_callback_ = nullptr;
+  void* const user_data_ = nullptr;
+  const AngleSurfaceManager* surface_manager_;
+  const GlProcs& gl_;
 };
 
 }  // namespace flutter

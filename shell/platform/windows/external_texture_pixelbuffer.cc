@@ -11,16 +11,17 @@ struct ExternalTexturePixelBufferState {
 };
 
 ExternalTexturePixelBuffer::ExternalTexturePixelBuffer(
-    FlutterDesktopPixelBufferTextureCallback texture_callback,
-    void* user_data)
+    const FlutterDesktopPixelBufferTextureCallback texture_callback,
+    void* user_data,
+    const GlProcs& gl_procs)
     : state_(std::make_unique<ExternalTexturePixelBufferState>()),
       texture_callback_(texture_callback),
-      user_data_(user_data) {}
+      user_data_(user_data),
+      gl_(gl_procs) {}
 
 ExternalTexturePixelBuffer::~ExternalTexturePixelBuffer() {
-  const auto& gl = ResolveGlFunctions();
-  if (gl.valid && state_->gl_texture != 0) {
-    gl.glDeleteTextures(1, &state_->gl_texture);
+  if (state_->gl_texture != 0) {
+    gl_.glDeleteTextures(1, &state_->gl_texture);
   }
 }
 
@@ -48,30 +49,29 @@ bool ExternalTexturePixelBuffer::CopyPixelBuffer(size_t& width,
                                                  size_t& height) {
   const FlutterDesktopPixelBuffer* pixel_buffer =
       texture_callback_(width, height, user_data_);
-  const auto& gl = ResolveGlFunctions();
-  if (!gl.valid || !pixel_buffer || !pixel_buffer->buffer) {
+  if (!pixel_buffer || !pixel_buffer->buffer) {
     return false;
   }
   width = pixel_buffer->width;
   height = pixel_buffer->height;
 
   if (state_->gl_texture == 0) {
-    gl.glGenTextures(1, &state_->gl_texture);
+    gl_.glGenTextures(1, &state_->gl_texture);
 
-    gl.glBindTexture(GL_TEXTURE_2D, state_->gl_texture);
+    gl_.glBindTexture(GL_TEXTURE_2D, state_->gl_texture);
 
-    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 
-    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
   } else {
-    gl.glBindTexture(GL_TEXTURE_2D, state_->gl_texture);
+    gl_.glBindTexture(GL_TEXTURE_2D, state_->gl_texture);
   }
-  gl.glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pixel_buffer->width,
-                  pixel_buffer->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                  pixel_buffer->buffer);
+  gl_.glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, pixel_buffer->width,
+                   pixel_buffer->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                   pixel_buffer->buffer);
   return true;
 }
 

@@ -19,8 +19,9 @@ typedef struct ExternalTexturePixelBufferState ExternalTexturePixelBufferState;
 class ExternalTexturePixelBuffer : public ExternalTexture {
  public:
   ExternalTexturePixelBuffer(
-      FlutterDesktopPixelBufferTextureCallback texture_callback,
-      void* user_data);
+      const FlutterDesktopPixelBufferTextureCallback texture_callback,
+      void* user_data,
+      const GlProcs& gl_procs);
 
   virtual ~ExternalTexturePixelBuffer();
 
@@ -42,8 +43,9 @@ class ExternalTexturePixelBuffer : public ExternalTexture {
   bool CopyPixelBuffer(size_t& width, size_t& height);
 
   std::unique_ptr<ExternalTexturePixelBufferState> state_;
-  FlutterDesktopPixelBufferTextureCallback texture_callback_ = nullptr;
-  void* user_data_ = nullptr;
+  const FlutterDesktopPixelBufferTextureCallback texture_callback_ = nullptr;
+  void* const user_data_ = nullptr;
+  const GlProcs& gl_;
 };
 
 }  // namespace flutter

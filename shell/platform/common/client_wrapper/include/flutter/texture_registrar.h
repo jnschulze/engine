@@ -45,20 +45,31 @@ class PixelBufferTexture {
 // A GPU surface-based texture.
 class GpuSurfaceTexture {
  public:
-  GpuSurfaceTexture(
-      void* handle,
-      FlutterDesktopGpuSurfaceType surface_type,
-      size_t width,
-      size_t height,
-      FlutterDesktopPixelFormat format = kFlutterDesktopPixelFormatNone)
-      : surface_descriptor_({surface_type, handle, width, height, format}) {}
+  // A callback used for retrieving surface descriptors.
+  typedef std::function<
+      const FlutterDesktopGpuSurfaceDescriptor*(size_t width, size_t height)>
+      ObtainDescriptorCallback;
 
-  constexpr const FlutterDesktopGpuSurfaceDescriptor* descriptor() const {
-    return &surface_descriptor_;
+  GpuSurfaceTexture(FlutterDesktopGpuSurfaceType surface_type,
+                    ObtainDescriptorCallback obtain_descriptor_callback)
+      : surface_type_(surface_type),
+        obtain_descriptor_callback_(obtain_descriptor_callback) {}
+
+  // Returns the callback-provided FlutterDesktopGpuSurfaceDescriptor that
+  // contains the surface handle. The intended surface size is specified by
+  // |width| and |height|.
+  const FlutterDesktopGpuSurfaceDescriptor* ObtainDescriptor(
+      size_t width,
+      size_t height) const {
+    return obtain_descriptor_callback_(width, height);
   }
 
+  // Gets the surface type.
+  const FlutterDesktopGpuSurfaceType surface_type() { return surface_type_; }
+
  private:
-  const FlutterDesktopGpuSurfaceDescriptor surface_descriptor_;
+  const FlutterDesktopGpuSurfaceType surface_type_;
+  const ObtainDescriptorCallback obtain_descriptor_callback_;
 };
 
 // The available texture variants.

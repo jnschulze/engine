@@ -4,91 +4,109 @@
 
 #include "flutter/shell/platform/windows/external_texture_d3d.h"
 
+#include <iostream>
+
 namespace flutter {
 
-std::unique_ptr<ExternalTextureD3D>
-ExternalTextureD3D::MakeFromSurfaceDescriptor(
-    const FlutterDesktopGpuSurfaceDescriptor* descriptor,
-    AngleSurfaceManager* surface_manager) {
-  EGLSurface surface = EGL_NO_SURFACE;
-  EGLint attributes[] = {EGL_WIDTH,
-                         static_cast<EGLint>(descriptor->width),
-                         EGL_HEIGHT,
-                         static_cast<EGLint>(descriptor->height),
-                         EGL_TEXTURE_TARGET,
-                         EGL_TEXTURE_2D,
-                         EGL_TEXTURE_FORMAT,
-                         EGL_TEXTURE_RGBA,  // always EGL_TEXTURE_RGBA
-                         EGL_NONE};
+struct ExternalTextureD3dState {
+  GLuint gl_texture = 0;
+  EGLSurface egl_surface = EGL_NO_SURFACE;
+  void* last_surface_handle = nullptr;
+};
 
-  surface = eglCreatePbufferFromClientBuffer(
-      surface_manager->egl_display(), EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE,
-      descriptor->handle, surface_manager->egl_config(), attributes);
+ExternalTextureD3d::ExternalTextureD3d(
+    const FlutterDesktopGpuSurfaceTextureCallback texture_callback,
+    void* user_data,
+    const AngleSurfaceManager* surface_manager,
+    const GlProcs& gl_procs)
+    : state_(std::make_unique<ExternalTextureD3dState>()),
+      texture_callback_(texture_callback),
+      user_data_(user_data),
+      surface_manager_(surface_manager),
+      gl_(gl_procs) {}
 
-  if (surface == EGL_NO_SURFACE) {
-    return {};
+ExternalTextureD3d::~ExternalTextureD3d() {
+  if (state_->egl_surface != EGL_NO_SURFACE) {
+    eglDestroySurface(surface_manager_->egl_display(), state_->egl_surface);
   }
 
-  return std::unique_ptr<ExternalTextureD3D>(
-      new ExternalTextureD3D(surface_manager->egl_display(), surface,
-                             descriptor->width, descriptor->height));
-}
-
-ExternalTextureD3D::ExternalTextureD3D(EGLDisplay egl_display,
-                                       EGLSurface surface,
-                                       size_t width,
-                                       size_t height)
-    : egl_surface_(surface),
-      width_(width),
-      height_(height),
-      egl_display_(egl_display) {}
-
-ExternalTextureD3D::~ExternalTextureD3D() {
-  if (egl_surface_) {
-    eglDestroySurface(egl_display_, egl_surface_);
-  }
-
-  const auto& gl = ResolveGlFunctions();
-  if (gl.valid && gl_texture_ != 0) {
-    gl.glDeleteTextures(1, &gl_texture_);
+  if (state_->gl_texture != 0) {
+    gl_.glDeleteTextures(1, &state_->gl_texture);
   }
 }
 
-bool ExternalTextureD3D::PopulateTexture(size_t width,
+bool ExternalTextureD3d::PopulateTexture(size_t width,
                                          size_t height,
                                          FlutterOpenGLTexture* opengl_texture) {
-  const auto& gl = ResolveGlFunctions();
+  const FlutterDesktopGpuSurfaceDescriptor* descriptor =
+      texture_callback_(width, height, user_data_);
 
-  if (gl_texture_ == 0) {
-    gl.glGenTextures(1, &gl_texture_);
-
-    gl.glBindTexture(GL_TEXTURE_2D, gl_texture_);
-
-    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-
-    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    if (eglBindTexImage(egl_display_, egl_surface_, EGL_BACK_BUFFER) !=
-        EGL_TRUE) {
-      gl.glDeleteTextures(1, &gl_texture_);
-      gl_texture_ = 0;
-      return false;
-    }
-  } else {
-    gl.glBindTexture(GL_TEXTURE_2D, gl_texture_);
+  if (!CreateOrUpdateTexture(descriptor)) {
+    return false;
   }
 
+  // Populate the texture object used by the engine.
   opengl_texture->target = GL_TEXTURE_2D;
-  opengl_texture->name = gl_texture_;
+  opengl_texture->name = state_->gl_texture;
   opengl_texture->format = GL_RGBA8;
   opengl_texture->destruction_callback = nullptr;
   opengl_texture->user_data = nullptr;
-  opengl_texture->width = width_;
-  opengl_texture->height = height_;
+  opengl_texture->width = descriptor->visible_width;
+  opengl_texture->height = descriptor->visible_height;
 
   return true;
+}
+
+bool ExternalTextureD3d::CreateOrUpdateTexture(
+    const FlutterDesktopGpuSurfaceDescriptor* descriptor) {
+  if (descriptor == nullptr || descriptor->handle == nullptr) {
+    return false;
+  }
+
+  ExternalTextureD3dState* state = state_.get();
+  if (state->gl_texture == 0) {
+    gl_.glGenTextures(1, &state_->gl_texture);
+
+    gl_.glBindTexture(GL_TEXTURE_2D, state_->gl_texture);
+
+    gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+    gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl_.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  } else {
+    gl_.glBindTexture(GL_TEXTURE_2D, state->gl_texture);
+  }
+
+  if (descriptor->handle != state->last_surface_handle) {
+    if (state->egl_surface != EGL_NO_SURFACE) {
+      eglReleaseTexImage(surface_manager_->egl_display(), state->egl_surface,
+                         EGL_BACK_BUFFER);
+      eglDestroySurface(surface_manager_->egl_display(), state->egl_surface);
+    }
+
+    EGLint attributes[] = {EGL_WIDTH,
+                           static_cast<EGLint>(descriptor->width),
+                           EGL_HEIGHT,
+                           static_cast<EGLint>(descriptor->height),
+                           EGL_TEXTURE_TARGET,
+                           EGL_TEXTURE_2D,
+                           EGL_TEXTURE_FORMAT,
+                           EGL_TEXTURE_RGBA,  // always EGL_TEXTURE_RGBA
+                           EGL_NONE};
+
+    state->last_surface_handle = descriptor->handle;
+    state->egl_surface = surface_manager_->CreateSurfaceFromHandle(
+        EGL_D3D_TEXTURE_2D_SHARE_HANDLE_ANGLE, descriptor->handle, attributes);
+
+    if (state->egl_surface == EGL_NO_SURFACE ||
+        eglBindTexImage(surface_manager_->egl_display(), state->egl_surface,
+                        EGL_BACK_BUFFER) == EGL_FALSE) {
+      std::cerr << "Binding DXGI surface failed." << std::endl;
+    }
+  }
+
+  return state->egl_surface != EGL_NO_SURFACE;
 }
 
 }  // namespace flutter

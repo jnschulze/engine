@@ -19,6 +19,12 @@ FlutterWindowsTextureRegistrar::FlutterWindowsTextureRegistrar(
 
 int64_t FlutterWindowsTextureRegistrar::RegisterTexture(
     const FlutterDesktopTextureInfo* texture_info) {
+  const auto& gl_procs = ResolveGlFunctions();
+  if (!gl_procs.valid) {
+    std::cerr << "Unable to resolve GL functions" << std::endl;
+    return -1;
+  }
+
   if (texture_info->type == kFlutterDesktopPixelBufferTexture) {
     if (!texture_info->pixel_buffer_config.callback) {
       std::cerr << "Invalid pixel buffer texture callback." << std::endl;
@@ -27,26 +33,23 @@ int64_t FlutterWindowsTextureRegistrar::RegisterTexture(
 
     return EmplaceTexture(std::make_unique<flutter::ExternalTexturePixelBuffer>(
         texture_info->pixel_buffer_config.callback,
-        texture_info->pixel_buffer_config.user_data));
-  }
-
-  else if (texture_info->type == kFlutterDesktopGpuSurfaceTexture &&
-           texture_info->gpu_surface_descriptor.type ==
-               kFlutterDesktopGpuSurfaceTypeDxgi) {
-    auto texture = flutter::ExternalTextureD3D::MakeFromSurfaceDescriptor(
-        &texture_info->gpu_surface_descriptor, engine_->surface_manager());
-    if (texture) {
-      return EmplaceTexture(std::move(texture));
+        texture_info->pixel_buffer_config.user_data, gl_procs));
+  } else if (texture_info->type == kFlutterDesktopGpuSurfaceTexture &&
+             texture_info->gpu_surface_config.type ==
+                 kFlutterDesktopGpuSurfaceTypeDxgi ==
+                 kFlutterDesktopGpuSurfaceTypeDxgi) {
+    if (!texture_info->gpu_surface_config.callback) {
+      std::cerr << "Invalid DXGI surface callback." << std::endl;
+      return -1;
     }
 
-    std::cerr << "Creating texture from DXGI surface failed." << std::endl;
+    return EmplaceTexture(std::make_unique<flutter::ExternalTextureD3d>(
+        texture_info->gpu_surface_config.callback,
+        texture_info->gpu_surface_config.user_data, engine_->surface_manager(),
+        gl_procs));
   }
 
-  else {
-    std::cerr << "Attempted to register texture of unsupport type."
-              << std::endl;
-  }
-
+  std::cerr << "Attempted to register texture of unsupport type." << std::endl;
   return -1;
 }
 

@@ -28,6 +28,14 @@ typedef enum {
   kFlutterDesktopGpuSurfaceTexture
 } FlutterDesktopTextureType;
 
+// Supported GPU surface types.
+typedef enum {
+  // Uninitialized.
+  kFlutterDesktopGpuSurfaceTypeNone,
+  // A D3D/DXGI-based surface.
+  kFlutterDesktopGpuSurfaceTypeDxgi
+} FlutterDesktopGpuSurfaceType;
+
 // Supported pixel formats.
 typedef enum {
   // Uninitialized.
@@ -50,26 +58,22 @@ typedef struct {
   size_t height;
 } FlutterDesktopPixelBuffer;
 
-// Supported GPU surface types.
-typedef enum {
-  // Uninitialized.
-  kFlutterDesktopGpuSurfaceTypeNone,
-  // A D3D/DXGI-based surface.
-  kFlutterDesktopGpuSurfaceTypeDxgi
-} FlutterDesktopGpuSurfaceType;
-
 // A GPU surface descriptor.
 typedef struct {
-  // The type of surface |handle| points to.
-  FlutterDesktopGpuSurfaceType type;
   // The surface handle.
   // For DirectX textures (kFlutterDesktopGpuSurfaceTypeDxgi), this is the
   // shared handle of an IDXGIResource.
   void* handle;
-  // The width of the surface.
+  // The physical width.
   size_t width;
-  // The height of the surface.
+  // The physical height.
   size_t height;
+  // The visible width.
+  // It might be less or equal to the physical |width|.
+  size_t visible_width;
+  // The visible height.
+  // It might be less or equal to the physical |height|.
+  size_t visible_height;
   // The pixel format which might by optional depending on the surface type.
   FlutterDesktopPixelFormat format;
 } FlutterDesktopGpuSurfaceDescriptor;
@@ -88,6 +92,11 @@ typedef const FlutterDesktopPixelBuffer* (
                                                size_t height,
                                                void* user_data);
 
+typedef const FlutterDesktopGpuSurfaceDescriptor* (
+    *FlutterDesktopGpuSurfaceTextureCallback)(size_t width,
+                                              size_t height,
+                                              void* user_data);
+
 // An object used to configure pixel buffer textures.
 typedef struct {
   // The callback used by the engine to copy the pixel buffer object.
@@ -96,11 +105,21 @@ typedef struct {
   void* user_data;
 } FlutterDesktopPixelBufferTextureConfig;
 
+// An object used to configure GPU-surface textures.
+typedef struct {
+  // The concrete surface type (e.g. kFlutterDesktopGpuSurfaceTypeDxgi)
+  FlutterDesktopGpuSurfaceType type;
+  // The callback used by the engine to obtain the surface descriptor.
+  FlutterDesktopGpuSurfaceTextureCallback callback;
+  // Opaque data that will get passed to the provided |callback|.
+  void* user_data;
+} FlutterDesktopGpuSurfaceTextureConfig;
+
 typedef struct {
   FlutterDesktopTextureType type;
   union {
     FlutterDesktopPixelBufferTextureConfig pixel_buffer_config;
-    FlutterDesktopGpuSurfaceDescriptor gpu_surface_descriptor;
+    FlutterDesktopGpuSurfaceTextureConfig gpu_surface_config;
   };
 } FlutterDesktopTextureInfo;
 
