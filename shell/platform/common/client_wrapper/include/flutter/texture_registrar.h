@@ -65,7 +65,7 @@ class GpuSurfaceTexture {
   }
 
   // Gets the surface type.
-  const FlutterDesktopGpuSurfaceType surface_type() { return surface_type_; }
+  FlutterDesktopGpuSurfaceType surface_type() const { return surface_type_; }
 
  private:
   const FlutterDesktopGpuSurfaceType surface_type_;
